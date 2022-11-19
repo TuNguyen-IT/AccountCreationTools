@@ -9,20 +9,24 @@ using OpenQA.Selenium.Support.UI;
 using AutomationTesting.StepDefinitions;
 using System.Configuration;
 using System.IO;
+using System.Reflection;
+using System.Web.Security;
 
 namespace AutomationTesting
 {
     class FacebookAction
     {
         IWebDriver driver;
+        private int BatchSize { get; set; }
 
         [SetUp]
-        public void startBrowser()
+        public void StartBrowser()
         {
             ChromeOptions options = new ChromeOptions();
             options.AddArguments("--incognito");
-            var driverUrl = new Uri(ConfigurationManager.AppSettings["DriverUrl"]);
-            driver = new ChromeDriver(driverUrl.LocalPath);
+            BatchSize = ConfigurationManager.AppSettings["BatchSize"] != null ? int.Parse(ConfigurationManager.AppSettings["BatchSize"]) : 5;
+            string driverUrl = Directory.GetParent(Assembly.GetExecutingAssembly().Location).Parent.Parent.FullName + "\\Driver";
+            driver = new ChromeDriver(driverUrl);
         }
 
         [Test]
@@ -52,49 +56,11 @@ namespace AutomationTesting
             try
             {
                 driver.Url = ConfigurationManager.AppSettings["FacebookUrl"];
-                for (int i = 0; i < 5; i++)
+                for (int i = 0; i < BatchSize; i++)
                 {
-                    Random random = new Random();
-                    const string chars = "abcdefghijklmnopqrstuvwxyz";
-                    var randomString = new string(Enumerable.Repeat(chars, 6)
-                        .Select(s => s[random.Next(s.Length)]).ToArray());
-                    var firstNameStr = StringGenerators.GenerateRandomName(4);
-                    var surnameStr = StringGenerators.GenerateRandomName(5);
-                    var emailStr = randomString + "@gmail.com";
-
-                    var firstNameSelector = By.XPath("//input[@name='firstname']");
-                    var surnameSelector = By.XPath("//input[@name='lastname']");
-                    var emailSelector = By.XPath("//input[@name='reg_email__']");
-                    var emailConfirmSelector = By.XPath("//input[@name='reg_email_confirmation__']");
-                    var passwordSelector = By.XPath("//input[@name='reg_passwd__']");
-                    var genderSelector = By.XPath("//input[@name='sex']");
-                    var birthdayYearSelector = By.Name("birthday_year");
-                    var registerBtnSelector = By.XPath("//a[@data-testid='open-registration-form-button']");
-                    //Open up the registration pop up
-                    driver.FindElement(registerBtnSelector).Click();
-
-                    driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(1);
-                    driver.FindElement(firstNameSelector).SendKeys(firstNameStr);
-                    driver.FindElement(surnameSelector).SendKeys(surnameStr);
-                    driver.FindElement(emailSelector).SendKeys(emailStr);
-                    driver.FindElement(emailConfirmSelector).SendKeys(emailStr);
-                    var selectElement = new SelectElement(driver.FindElement(birthdayYearSelector));
-                    selectElement.SelectByValue("1995");
-                    driver.FindElement(passwordSelector).SendKeys("Welcome@1");
-                    driver.FindElements(genderSelector).FirstOrDefault().Click();
-                    var signUpBtnSelector = By.XPath("//button[normalize-space() = 'Sign Up']");
-                    // Submit sign up account
-                    driver.FindElement(signUpBtnSelector).Click();
-
-                    // Wait Until account is registed sussessfully
-                    Common.WaitUntilElementInVisible(driver, signUpBtnSelector, 10);
-
-                    // Save account information
-                    ExcelService.SaveExcel(randomString + "@gmail.com", "Welcome@1");
-                    driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(2);
-                    
-                    // create another account
-                    driver.Navigate().GoToUrl(ConfigurationManager.AppSettings["FacebookUrl"]);
+                    var emailStr = StringGenerators.GenerateRandomEmail(6);
+                    var passwordStr = Membership.GeneratePassword(8, 2);
+                    Facebook.SignUp(driver, emailStr, passwordStr);
                 }
 
                 driver.Close();
@@ -115,45 +81,12 @@ namespace AutomationTesting
                 var accounts = ExcelService.ReadDataFromExcel();
                 if (accounts != null && accounts.Any())
                 {
+                    // TODO: take account using batch size
                     foreach (var account in accounts)
                     {
-                        Random random = new Random();
-                        const string chars = "abcdefghijklmnopqrstuvwxyz";
-                        var randomString = new string(Enumerable.Repeat(chars, 6)
-                            .Select(s => s[random.Next(s.Length)]).ToArray());
-                        var firstNameStr = StringGenerators.GenerateRandomName(4);
-                        var surnameStr = StringGenerators.GenerateRandomName(5);
-                        var emailStr = randomString + "@gmail.com";
-
-                        var firstNameSelector = By.XPath("//input[@name='firstname']");
-                        var surnameSelector = By.XPath("//input[@name='lastname']");
-                        var emailSelector = By.XPath("//input[@name='reg_email__']");
-                        var emailConfirmSelector = By.XPath("//input[@name='reg_email_confirmation__']");
-                        var passwordSelector = By.XPath("//input[@name='reg_passwd__']");
-                        var genderSelector = By.XPath("//input[@name='sex']");
-                        var birthdayYearSelector = By.Name("birthday_year");
-                        var registerBtnSelector = By.XPath("//a[@data-testid='open-registration-form-button']");
-                        //Open up the registration pop up
-                        driver.FindElement(registerBtnSelector).Click();
-
-                        driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(2);
-                        driver.FindElement(firstNameSelector).SendKeys(firstNameStr);
-                        driver.FindElement(surnameSelector).SendKeys(surnameStr);
-                        driver.FindElement(emailSelector).SendKeys(account.Email);
-                        driver.FindElement(emailConfirmSelector).SendKeys(account.Email);
-                        var selectElement = new SelectElement(driver.FindElement(birthdayYearSelector));
-                        selectElement.SelectByValue("1995");
-                        driver.FindElement(passwordSelector).SendKeys(account.Password);
-                        driver.FindElements(genderSelector).FirstOrDefault().Click();
-                        var signUpBtnSelector = By.XPath("//button[normalize-space() = 'Sign Up']");
-                        // Submit sign up account
-                        //driver.FindElement(signUpBtnSelector).Click();
-
-                        ExcelService.SaveExcel(account.Email, account.Password);
+                        Facebook.SignUp(driver, account.Email, account.Password);
                     }
                 }
-
-                driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(2);
             }
             catch (Exception ex)
             {
@@ -172,7 +105,7 @@ namespace AutomationTesting
         }
 
         [TearDown]
-        public void closeBrowser()
+        public void CloseBrowser()
         {
             driver.Close();
             driver.Quit();

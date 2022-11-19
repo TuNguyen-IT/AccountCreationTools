@@ -31,5 +31,27 @@ namespace AutomationTesting.Extensions
 
             return Name;
         }
+
+        public static string GenerateRandomEmail(int length, string domain = "gmail")
+        {
+            return string.Format("{0}@{1}.com", GenerateRandomAlphabetString(length), domain);
+        }
+
+        /// <summary>
+        /// Gets a string from the English alphabet at random
+        /// </summary>
+        public static string GenerateRandomAlphabetString(int length)
+        {
+            const string allowedChars = "abcdefghijklmnopqrstuvwxyz";
+            var rnd = new Random(Guid.NewGuid().GetHashCode());
+
+            char[] chars = new char[length];
+            for (int i = 0; i < length; i++)
+            {
+                chars[i] = allowedChars[rnd.Next(allowedChars.Length)];
+            }
+
+            return new string(chars);
+        }
     }
 }
